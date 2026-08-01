@@ -58,8 +58,10 @@
         .court-names-grid input { width: 100%; font-size: 13px; padding: 5px; }
 
         /* 懸浮派定工具列 */
-        .assign-bar { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: #2c3e50; color: white; padding: 8px 15px; border-radius: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 8px; z-index: 1000; font-size: 13px; }
-        .btn-court-direct { background: #1abc9c; color: white; border: none; padding: 4px 8px; border-radius: 12px; font-size: 12px; cursor: pointer; }
+        .assign-bar { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: #2c3e50; color: white; padding: 8px 12px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 6px; z-index: 1000; font-size: 12px; width: 90%; max-width: 450px; }
+        .assign-bar-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .btn-direct { background: #1abc9c; color: white; border: none; padding: 4px 8px; border-radius: 10px; font-size: 12px; cursor: pointer; }
+        .btn-queue-direct { background: #3498db; color: white; border: none; padding: 4px 8px; border-radius: 10px; font-size: 12px; cursor: pointer; }
 
         /* Modal 後台彈窗 */
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000; }
@@ -91,7 +93,7 @@
     <div id="tab-content-queue" class="tab-content hidden">
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <h3 style="margin:0;">⏳ 中央預約隊列（依組別固定）</h3>
+                <h3 style="margin:0;">⏳ 中央預約隊列（固定組別）</h3>
                 <button onclick="createNewQueueGroup()" style="background:#3498db; font-size:12px; padding:4px 8px;">+ 新建預約組別</button>
             </div>
             <div id="queue-container"></div>
@@ -107,7 +109,7 @@
                 <button onclick="selfRegister()">報到</button>
             </div>
             <div class="section-label" style="color:#666; margin-top:8px;">
-                <span>☕ 點擊選取球員可直接「指派上場」，或按「+入隊」依序加入隊列</span>
+                <span>☕ 點擊選取球員可直接「指派上場/指派組別」，或按「+入隊」依序排隊</span>
             </div>
             <div id="waiting-room" class="drop-zone-waiting" onclick="handleZoneClick(event, 'waiting-room')"></div>
         </div>
@@ -116,10 +118,18 @@
 
 <!-- 快速指派控制列（點選球員時出現） -->
 <div id="assign-bar" class="assign-bar hidden">
-    <span id="assign-player-name" style="font-weight:bold; color:#f1c40f;"></span>
-    <span>移至：</span>
-    <div id="assign-court-buttons" style="display:flex; gap:4px;"></div>
-    <button onclick="deselectPlayer()" style="background:#e74c3c; border-radius:12px; padding:3px 8px; font-size:11px;">取消</button>
+    <div class="assign-bar-row">
+        <span>已選取：<strong id="assign-player-name" style="color:#f1c40f;"></strong></span>
+        <button onclick="deselectPlayer()" style="background:#e74c3c; border-radius:10px; padding:2px 8px; font-size:11px; margin-left:auto;">✕ 取消選取</button>
+    </div>
+    <div class="assign-bar-row">
+        <span style="opacity:0.8;">🏟️ 直上球場：</span>
+        <div id="assign-court-buttons" style="display:flex; gap:4px; flex-wrap:wrap;"></div>
+    </div>
+    <div class="assign-bar-row">
+        <span style="opacity:0.8;">⏳ 加入隊列：</span>
+        <div id="assign-queue-buttons" style="display:flex; gap:4px; flex-wrap:wrap;"></div>
+    </div>
 </div>
 
 <!-- 管理者後台 Modal 彈窗 -->
@@ -208,12 +218,15 @@
         if (data) {
             localData = data;
             if (!localData.players) localData.players = {};
-            if (!localData.queueGroups) {
+            if (!localData.queueGroups || !Array.isArray(localData.queueGroups)) {
                 localData.queueGroups = [
                     { id: 'group_1', players: [] },
                     { id: 'group_2', players: [] }
                 ];
             }
+            // 確保組別內 players 為陣列
+            localData.queueGroups.forEach(g => { if (!g.players) g.players = []; });
+
             if (!localData.courtNames) {
                 localData.courtNames = Array.from({length: localData.courtCount || 2}, (_, i) => `第 ${i+1} 場`);
             }
@@ -296,7 +309,7 @@
             });
         }
 
-        // 2. 中央隊列區 (依固定組別渲染)
+        // 2. 中央隊列區
         const queueContainer = document.getElementById('queue-container');
         queueContainer.innerHTML = '';
 
@@ -364,14 +377,12 @@
                     const playerId = evt.item.dataset.id;
                     const targetZoneId = evt.to.id;
 
-                    // 限 4 人
                     if (evt.to.children.length > 4 && targetZoneId !== 'waiting-room') {
                         alert('⚠️ 該區塊上限為 4 人！');
                         renderUI();
                         return;
                     }
 
-                    // 從舊結構完全移除球員
                     removePlayerFromAllQueueGroups(playerId);
 
                     if (targetZoneId === 'waiting-room') {
@@ -452,17 +463,29 @@
         const p = localData.players[selectedPlayerId];
         document.getElementById('assign-player-name').innerText = p.name;
         
-        const btnContainer = document.getElementById('assign-court-buttons');
-        btnContainer.innerHTML = '';
-
+        // 球場按鈕
+        const courtBtnContainer = document.getElementById('assign-court-buttons');
+        courtBtnContainer.innerHTML = '';
         for (let i = 1; i <= localData.courtCount; i++) {
             const courtName = (localData.courtNames && localData.courtNames[i-1]) ? localData.courtNames[i-1] : `場${i}`;
             const btn = document.createElement('button');
-            btn.className = 'btn-court-direct';
+            btn.className = 'btn-direct';
             btn.innerText = courtName;
             btn.onclick = () => directAssignToCourt(selectedPlayerId, `court-${i}-play`);
-            btnContainer.appendChild(btn);
+            courtBtnContainer.appendChild(btn);
         }
+
+        // 隊列組別按鈕
+        const queueBtnContainer = document.getElementById('assign-queue-buttons');
+        queueBtnContainer.innerHTML = '';
+        localData.queueGroups.forEach((g, idx) => {
+            const count = (g.players || []).length;
+            const btn = document.createElement('button');
+            btn.className = 'btn-queue-direct';
+            btn.innerText = `第 ${idx + 1} 組 (${count}/4)`;
+            btn.onclick = () => directAssignToGroup(selectedPlayerId, g.id);
+            queueBtnContainer.appendChild(btn);
+        });
 
         bar.classList.remove('hidden');
     }
@@ -489,26 +512,51 @@
         }
     }
 
+    function directAssignToGroup(playerId, groupId) {
+        const g = localData.queueGroups.find(x => x.id === groupId);
+        if (g) {
+            if ((g.players || []).length >= 4) {
+                alert('⚠️ 該組別已滿 4 人！');
+                return;
+            }
+            removePlayerFromAllQueueGroups(playerId);
+            g.players.push(playerId);
+            localData.players[playerId].status = 'queued';
+            localData.players[playerId].location = `group-${groupId}`;
+            selectedPlayerId = null;
+            saveToCloud();
+        }
+    }
+
     function joinQueue(event, playerId) {
-        event.stopPropagation();
-        // 尋找第一個未滿 4 人的組別加入
+        if (event) event.stopPropagation();
+
+        // 尋找第一個未滿 4 人的組別
         let targetGroup = localData.queueGroups.find(g => (g.players || []).length < 4);
+        
         if (!targetGroup) {
-            // 如果都滿了，創一個新組別
+            // 如果所有組別都滿了，新建一個組別
             const newId = 'group_' + Date.now();
             targetGroup = { id: newId, players: [] };
             localData.queueGroups.push(targetGroup);
         }
 
+        removePlayerFromAllQueueGroups(playerId);
+
+        if (!targetGroup.players) targetGroup.players = [];
         targetGroup.players.push(playerId);
-        localData.players[playerId].status = 'queued';
-        localData.players[playerId].location = `group-${targetGroup.id}`;
-        localData.players[playerId].restStartTime = Date.now();
+
+        if (localData.players[playerId]) {
+            localData.players[playerId].status = 'queued';
+            localData.players[playerId].location = `group-${targetGroup.id}`;
+            localData.players[playerId].restStartTime = Date.now();
+        }
+
         saveToCloud();
     }
 
     function leaveQueue(event, playerId) {
-        event.stopPropagation();
+        if (event) event.stopPropagation();
         removePlayerFromAllQueueGroups(playerId);
         if (localData.players[playerId]) {
             localData.players[playerId].status = 'idle';
