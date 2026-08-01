@@ -33,11 +33,13 @@
         .tab-btn.active { background: white; color: var(--primary-color); box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
         
         .drop-zone { min-height: 45px; padding: 6px; background: rgba(255,255,255,0.15); border: 2px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+        .drop-zone-queue { min-height: 45px; padding: 6px; background: #f1f5f9; border: 2px dashed #94a3b8; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
         .drop-zone-waiting { min-height: 45px; padding: 6px; background: #f8f9fa; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
 
         /* 中央隊列組別樣式 */
-        .queue-group-card { background: #ffffff; border: 2px solid #3498db; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
-        .queue-group-header { font-weight: bold; color: #2980b9; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+        .queue-group-card { background: #ffffff; border: 2px solid #3498db; border-radius: 8px; padding: 8px; margin-bottom: 10px; }
+        .queue-group-card.incomplete { border-color: #e67e22; background-color: #fdfefe; }
+        .queue-group-header { font-weight: bold; color: #2980b9; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
         
         .player-tag { background: var(--accent-color); color: white; padding: 5px 8px; border-radius: 16px; font-weight: bold; font-size: 13px; user-select: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-flex; align-items: center; gap: 4px; }
         .player-tag.selected { background-color: var(--selected-color); ring: 2px solid #7f8c8d; }
@@ -88,7 +90,10 @@
     <!-- 頁籤內容 2：⏳ 中央隊列等候區 -->
     <div id="tab-content-queue" class="tab-content hidden">
         <div class="panel">
-            <h3 style="margin-top:0;">⏳ 中央預約隊列（自動排序）</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <h3 style="margin:0;">⏳ 中央預約隊列（依組別固定）</h3>
+                <button onclick="createNewQueueGroup()" style="background:#3498db; font-size:12px; padding:4px 8px;">+ 新建預約組別</button>
+            </div>
             <div id="queue-container"></div>
         </div>
     </div>
@@ -102,7 +107,7 @@
                 <button onclick="selfRegister()">報到</button>
             </div>
             <div class="section-label" style="color:#666; margin-top:8px;">
-                <span>☕ 點擊選取球員可直接「指派上場」，或按「+入隊」依序排隊</span>
+                <span>☕ 點擊選取球員可直接「指派上場」，或按「+入隊」依序加入隊列</span>
             </div>
             <div id="waiting-room" class="drop-zone-waiting" onclick="handleZoneClick(event, 'waiting-room')"></div>
         </div>
@@ -171,6 +176,10 @@
     let localData = { 
         courtCount: 2, 
         courtNames: ["第 1 場", "第 2 場"],
+        queueGroups: [
+            { id: 'group_1', players: [] },
+            { id: 'group_2', players: [] }
+        ],
         players: {} 
     };
 
@@ -199,6 +208,12 @@
         if (data) {
             localData = data;
             if (!localData.players) localData.players = {};
+            if (!localData.queueGroups) {
+                localData.queueGroups = [
+                    { id: 'group_1', players: [] },
+                    { id: 'group_2', players: [] }
+                ];
+            }
             if (!localData.courtNames) {
                 localData.courtNames = Array.from({length: localData.courtCount || 2}, (_, i) => `第 ${i+1} 場`);
             }
@@ -239,29 +254,36 @@
         closeAdminModal();
     }
 
+    function createNewQueueGroup() {
+        const newId = 'group_' + Date.now();
+        localData.queueGroups.push({ id: newId, players: [] });
+        saveToCloud();
+    }
+
     function renderUI() {
         const now = Date.now();
         const waitingZone = document.getElementById('waiting-room');
         waitingZone.innerHTML = '';
         
         const idlePlayers = [];
-        const queuedPlayers = [];
+        let queuedCount = 0;
+
+        // 計算隊列總人數
+        localData.queueGroups.forEach(g => {
+            if (g.players) queuedCount += g.players.length;
+        });
 
         Object.keys(localData.players).forEach(id => {
             const p = localData.players[id];
             if (!p.restStartTime) p.restStartTime = now;
             if (p.playCount === undefined) p.playCount = 0;
 
-            if (p.location && p.location.endsWith('-play')) {
-                // 比賽中
-            } else if (p.status === 'queued') {
-                queuedPlayers.push({ id, ...p });
-            } else {
+            if (p.status === 'idle' || !p.status) {
                 idlePlayers.push({ id, ...p });
             }
         });
 
-        document.getElementById('tab-queue-count').innerText = queuedPlayers.length;
+        document.getElementById('tab-queue-count').innerText = queuedCount;
         document.getElementById('tab-idle-count').innerText = idlePlayers.length;
 
         // 1. 報到區
@@ -274,34 +296,32 @@
             });
         }
 
-        // 2. 隊列區
-        queuedPlayers.sort((a, b) => {
-            if (a.playCount !== b.playCount) return a.playCount - b.playCount;
-            return a.restStartTime - b.restStartTime;
-        });
-
+        // 2. 中央隊列區 (依固定組別渲染)
         const queueContainer = document.getElementById('queue-container');
         queueContainer.innerHTML = '';
 
-        if (queuedPlayers.length === 0) {
-            queueContainer.innerHTML = '<div style="text-align:center; color:#888; padding:15px;">目前隊列中沒有人在排隊</div>';
-        } else {
-            const totalGroups = Math.ceil(queuedPlayers.length / 4);
-            for (let g = 0; g < totalGroups; g++) {
-                const groupPlayers = queuedPlayers.slice(g * 4, (g + 1) * 4);
-                const groupCard = document.createElement('div');
-                groupCard.className = 'queue-group-card';
-                groupCard.innerHTML = `
-                    <div class="queue-group-header"><span>👥 第 ${g + 1} 組 (${groupPlayers.length}/4人)</span></div>
-                    <div class="drop-zone" id="queue-group-${g}" onclick="handleZoneClick(event, 'queue-group-${g}')"></div>
-                `;
-                queueContainer.appendChild(groupCard);
-                const groupZone = groupCard.querySelector('.drop-zone');
-                groupPlayers.forEach(p => {
-                    groupZone.appendChild(createPlayerTag(p.id, p, 'queued'));
-                });
-            }
-        }
+        localData.queueGroups.forEach((group, index) => {
+            const groupPlayers = group.players || [];
+            const isFull = groupPlayers.length === 4;
+            const groupCard = document.createElement('div');
+            groupCard.className = `queue-group-card ${isFull ? '' : 'incomplete'}`;
+            
+            groupCard.innerHTML = `
+                <div class="queue-group-header">
+                    <span>👥 第 ${index + 1} 組 (${groupPlayers.length}/4人) ${isFull ? '✅ 已集滿' : '⏳ 缺 ' + (4 - groupPlayers.length) + ' 人'}</span>
+                </div>
+                <div class="drop-zone-queue" id="group-${group.id}" onclick="handleZoneClick(event, 'group-${group.id}')"></div>
+            `;
+            queueContainer.appendChild(groupCard);
+
+            const groupZone = groupCard.querySelector('.drop-zone-queue');
+            groupPlayers.forEach(pId => {
+                const p = localData.players[pId];
+                if (p) {
+                    groupZone.appendChild(createPlayerTag(pId, p, 'queued'));
+                }
+            });
+        });
 
         // 3. 球場區
         const grid = document.getElementById('courts-grid');
@@ -313,7 +333,7 @@
                 <div class="court">
                     <div class="court-header">
                         <span class="court-title">${courtName}</span>
-                        <button class="btn-action" onclick="finishGame(${i})">🏁 本局結束 (第1組進場)</button>
+                        <button class="btn-action" onclick="finishGame(${i})">🏁 本局結束 (下一組進場)</button>
                     </div>
                     <div class="section-label">
                         <span>🎾 目前比賽中</span>
@@ -327,7 +347,7 @@
         // 比賽中球員
         Object.keys(localData.players).forEach(id => {
             const player = localData.players[id];
-            if (player.location && player.location.endsWith('-play')) {
+            if (player.status === 'playing' && player.location) {
                 const targetZone = document.getElementById(player.location);
                 if (targetZone) {
                     targetZone.appendChild(createPlayerTag(id, player, 'playing'));
@@ -336,7 +356,7 @@
         });
 
         // 拖曳綁定
-        document.querySelectorAll('.drop-zone, .drop-zone-waiting').forEach(zone => {
+        document.querySelectorAll('.drop-zone, .drop-zone-queue, .drop-zone-waiting').forEach(zone => {
             new Sortable(zone, {
                 group: 'badminton',
                 animation: 150,
@@ -344,31 +364,46 @@
                     const playerId = evt.item.dataset.id;
                     const targetZoneId = evt.to.id;
 
-                    if (targetZoneId.includes('-play') && evt.to.children.length > 4) {
-                        alert('⚠️ 球場上限為 4 人！');
+                    // 限 4 人
+                    if (evt.to.children.length > 4 && targetZoneId !== 'waiting-room') {
+                        alert('⚠️ 該區塊上限為 4 人！');
                         renderUI();
                         return;
                     }
 
-                    if (localData.players[playerId]) {
-                        if (targetZoneId === 'waiting-room') {
-                            localData.players[playerId].status = 'idle';
-                            localData.players[playerId].location = 'waiting-room';
-                        } else if (targetZoneId.includes('-play')) {
-                            localData.players[playerId].status = 'playing';
-                            localData.players[playerId].location = targetZoneId;
-                        } else {
+                    // 從舊結構完全移除球員
+                    removePlayerFromAllQueueGroups(playerId);
+
+                    if (targetZoneId === 'waiting-room') {
+                        localData.players[playerId].status = 'idle';
+                        localData.players[playerId].location = 'waiting-room';
+                    } else if (targetZoneId.includes('-play')) {
+                        localData.players[playerId].status = 'playing';
+                        localData.players[playerId].location = targetZoneId;
+                    } else if (targetZoneId.startsWith('group-')) {
+                        const groupId = targetZoneId.replace('group-', '');
+                        const g = localData.queueGroups.find(x => x.id === groupId);
+                        if (g) {
+                            g.players.push(playerId);
                             localData.players[playerId].status = 'queued';
-                            localData.players[playerId].location = 'queued';
+                            localData.players[playerId].location = targetZoneId;
                         }
-                        saveToCloud();
                     }
+                    saveToCloud();
                 }
             });
         });
 
         renderAssignBar();
         updateCounters();
+    }
+
+    function removePlayerFromAllQueueGroups(playerId) {
+        localData.queueGroups.forEach(g => {
+            if (g.players) {
+                g.players = g.players.filter(id => id !== playerId);
+            }
+        });
     }
 
     function createPlayerTag(id, player, state) {
@@ -444,6 +479,8 @@
             return;
         }
 
+        removePlayerFromAllQueueGroups(playerId);
+
         if (localData.players[playerId]) {
             localData.players[playerId].status = 'playing';
             localData.players[playerId].location = courtZoneId;
@@ -454,16 +491,25 @@
 
     function joinQueue(event, playerId) {
         event.stopPropagation();
-        if (localData.players[playerId]) {
-            localData.players[playerId].status = 'queued';
-            localData.players[playerId].location = 'queued';
-            localData.players[playerId].restStartTime = Date.now();
-            saveToCloud();
+        // 尋找第一個未滿 4 人的組別加入
+        let targetGroup = localData.queueGroups.find(g => (g.players || []).length < 4);
+        if (!targetGroup) {
+            // 如果都滿了，創一個新組別
+            const newId = 'group_' + Date.now();
+            targetGroup = { id: newId, players: [] };
+            localData.queueGroups.push(targetGroup);
         }
+
+        targetGroup.players.push(playerId);
+        localData.players[playerId].status = 'queued';
+        localData.players[playerId].location = `group-${targetGroup.id}`;
+        localData.players[playerId].restStartTime = Date.now();
+        saveToCloud();
     }
 
     function leaveQueue(event, playerId) {
         event.stopPropagation();
+        removePlayerFromAllQueueGroups(playerId);
         if (localData.players[playerId]) {
             localData.players[playerId].status = 'idle';
             localData.players[playerId].location = 'waiting-room';
@@ -492,10 +538,12 @@
         if (!selectedPlayerId) return;
 
         const targetZone = document.getElementById(targetZoneId);
-        if (targetZoneId.includes('-play') && targetZone.children.length >= 4) {
-            alert('⚠️ 球場上限為 4 人！');
+        if (targetZoneId !== 'waiting-room' && targetZone && targetZone.children.length >= 4) {
+            alert('⚠️ 該區塊上限為 4 人！');
             return;
         }
+
+        removePlayerFromAllQueueGroups(selectedPlayerId);
 
         if (targetZoneId === 'waiting-room') {
             localData.players[selectedPlayerId].status = 'idle';
@@ -503,10 +551,14 @@
         } else if (targetZoneId.includes('-play')) {
             localData.players[selectedPlayerId].status = 'playing';
             localData.players[selectedPlayerId].location = targetZoneId;
-        } else {
-            localData.players[selectedPlayerId].status = 'queued';
-            localData.players[selectedPlayerId].location = 'queued';
-            localData.players[selectedPlayerId].restStartTime = Date.now();
+        } else if (targetZoneId.startsWith('group-')) {
+            const groupId = targetZoneId.replace('group-', '');
+            const g = localData.queueGroups.find(x => x.id === groupId);
+            if (g) {
+                g.players.push(selectedPlayerId);
+                localData.players[selectedPlayerId].status = 'queued';
+                localData.players[selectedPlayerId].location = targetZoneId;
+            }
         }
 
         selectedPlayerId = null;
@@ -517,32 +569,29 @@
         const courtName = (localData.courtNames && localData.courtNames[courtNumber-1]) ? localData.courtNames[courtNumber-1] : `第 ${courtNumber} 場`;
         const playZoneId = `court-${courtNumber}-play`;
 
-        const queuedPlayers = [];
-        Object.keys(localData.players).forEach(id => {
-            const p = localData.players[id];
-            if (p.status === 'queued') {
-                queuedPlayers.push({ id, ...p });
-            }
-        });
+        // 尋找第一個有人的預約組別
+        let targetGroupIndex = localData.queueGroups.findIndex(g => g.players && g.players.length > 0);
 
-        queuedPlayers.sort((a, b) => {
-            if (a.playCount !== b.playCount) return (a.playCount || 0) - (b.playCount || 0);
-            return (a.restStartTime || 0) - (b.restStartTime || 0);
-        });
-
-        const group1Players = queuedPlayers.slice(0, 4);
-
-        if (group1Players.length === 0) {
-            alert('⚠️ 目前預約佇列中沒有人在排隊喔！請球友點擊「+入隊」');
+        if (targetGroupIndex === -1) {
+            alert('⚠️ 目前預約隊列中沒有人在排隊喔！');
             return;
         }
 
-        const namesText = group1Players.map(p => p.name).join('、');
-        const confirmMsg = `📢 請【第 1 組 (${namesText})】\n👉 至【${courtName}】上場準備開打！\n\n是否確認切換？`;
+        const targetGroup = localData.queueGroups[targetGroupIndex];
+        const groupPlayers = targetGroup.players.map(id => localData.players[id]).filter(Boolean);
+        const namesText = groupPlayers.map(p => p.name).join('、');
+
+        let warningMsg = '';
+        if (groupPlayers.length < 4) {
+            warningMsg = `\n⚠️ 注意：【第 ${targetGroupIndex + 1} 組】目前只有 ${groupPlayers.length} 人 (未滿4人)！\n`;
+        }
+
+        const confirmMsg = `📢 請【第 ${targetGroupIndex + 1} 組 (${namesText})】${warningMsg}\n👉 至【${courtName}】上場準備開打！\n\n是否確認切換？`;
         
         if (confirm(confirmMsg)) {
             const now = Date.now();
 
+            // 1. 下場球員清算
             Object.keys(localData.players).forEach(id => {
                 const p = localData.players[id];
                 if (p.location === playZoneId) {
@@ -553,10 +602,21 @@
                 }
             });
 
-            group1Players.forEach(p => {
-                localData.players[p.id].status = 'playing';
-                localData.players[p.id].location = playZoneId;
+            // 2. 該組球員上場
+            targetGroup.players.forEach(pId => {
+                if (localData.players[pId]) {
+                    localData.players[pId].status = 'playing';
+                    localData.players[pId].location = playZoneId;
+                }
             });
+
+            // 3. 移除該預約組別
+            localData.queueGroups.splice(targetGroupIndex, 1);
+
+            // 確保隨時至少保留 2 個預約組別供排隊
+            while (localData.queueGroups.length < 2) {
+                localData.queueGroups.push({ id: 'group_' + Date.now() + '_' + Math.random(), players: [] });
+            }
 
             saveToCloud();
         }
@@ -608,7 +668,15 @@
         if (confirm('確定要清空今天所有的球員與場地資料嗎？')) {
             const count = parseInt(document.getElementById('court-select').value);
             const defaultNames = Array.from({length: count}, (_, i) => `第 ${i+1} 場`);
-            localData = { courtCount: count, courtNames: defaultNames, players: {} };
+            localData = { 
+                courtCount: count, 
+                courtNames: defaultNames, 
+                queueGroups: [
+                    { id: 'group_1', players: [] },
+                    { id: 'group_2', players: [] }
+                ],
+                players: {} 
+            };
             saveToCloud();
             closeAdminModal();
         }
