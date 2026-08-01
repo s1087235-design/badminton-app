@@ -12,54 +12,66 @@
     
     <style>
         :root { --primary-color: #2c3e50; --accent-color: #1abc9c; --selected-color: #9b59b6; --bg-color: #f4f6f7; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; padding: 15px; touch-action: manipulation; }
-        h1, h2, h3 { text-align: center; color: var(--primary-color); margin: 10px 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; padding: 10px; touch-action: manipulation; }
+        h1 { text-align: center; color: var(--primary-color); margin: 5px 0; font-size: 1.3rem; }
         .container { max-width: 800px; margin: 0 auto; }
-        .panel { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; }
-        .hidden { display: none; }
-        select, input, button, textarea { padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
+        .panel { background: white; padding: 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 10px; }
+        .hidden { display: none !important; }
+        select, input, button, textarea { padding: 8px; font-size: 15px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
         select { background-color: white; width: 100%; max-width: 200px; }
         button { background: var(--primary-color); color: white; border: none; font-weight: bold; cursor: pointer; }
-        .btn-action { background: #27ae60; padding: 6px 12px; font-size: 14px; border-radius: 6px; }
+        .btn-action { background: #27ae60; padding: 6px 12px; font-size: 13px; border-radius: 6px; }
         .btn-join { background: #e67e22; border: none; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 4px; }
         .btn-leave { background: #7f8c8d; border: none; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 4px; }
         .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
         .input-group input { flex: 1; }
         
-        .drop-zone { min-height: 50px; padding: 8px; background: rgba(255,255,255,0.15); border: 2px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
-        .drop-zone-waiting { min-height: 50px; padding: 8px; background: #f8f9fa; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+        /* 📱 頁籤分頁樣式 */
+        .tab-bar { display: flex; background: #e2e8f0; border-radius: 8px; padding: 3px; margin-bottom: 12px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .tab-btn { flex: 1; text-align: center; padding: 10px 4px; font-size: 14px; font-weight: bold; color: #475569; border-radius: 6px; cursor: pointer; background: transparent; transition: all 0.2s; }
+        .tab-btn.active { background: white; color: var(--primary-color); box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+        
+        .drop-zone { min-height: 45px; padding: 6px; background: rgba(255,255,255,0.15); border: 2px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+        .drop-zone-waiting { min-height: 45px; padding: 6px; background: #f8f9fa; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
 
         /* 中央隊列組別樣式 */
-        .queue-group-card { background: #ffffff; border: 2px solid #3498db; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
-        .queue-group-header { font-weight: bold; color: #2980b9; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .queue-group-card { background: #ffffff; border: 2px solid #3498db; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+        .queue-group-header { font-weight: bold; color: #2980b9; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
         
-        .player-tag { background: var(--accent-color); color: white; padding: 6px 10px; border-radius: 20px; font-weight: bold; font-size: 13px; user-select: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-flex; align-items: center; gap: 4px; }
+        .player-tag { background: var(--accent-color); color: white; padding: 5px 8px; border-radius: 16px; font-weight: bold; font-size: 13px; user-select: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-flex; align-items: center; gap: 4px; }
         .player-tag.selected { background-color: var(--selected-color); }
         .player-tag.idle-tag { background-color: #7f8c8d; }
-        .rest-badge { background: rgba(0,0,0,0.25); border-radius: 10px; padding: 2px 6px; font-size: 11px; font-weight: normal; }
-        .play-count-badge { background: #f39c12; border-radius: 10px; padding: 2px 6px; font-size: 11px; font-weight: normal; }
+        .rest-badge { background: rgba(0,0,0,0.25); border-radius: 10px; padding: 1px 5px; font-size: 10px; font-weight: normal; }
+        .play-count-badge { background: #f39c12; border-radius: 10px; padding: 1px 5px; font-size: 10px; font-weight: normal; }
         
-        .courts-container { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
-        .court { background: #2e7d32; color: white; border-radius: 10px; padding: 12px; box-shadow: 0 3px 6px rgba(0,0,0,0.15); }
-        .court-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 8px; margin-bottom: 10px; }
-        .court-title { font-size: 1.1rem; font-weight: bold; }
-        .section-label { font-size: 12px; font-weight: bold; opacity: 0.9; margin: 6px 0 4px 0; display: flex; justify-content: space-between; }
-        .sync-status { text-align: center; font-size: 12px; color: #27ae60; margin-bottom: 10px; }
+        .courts-container { display: flex; flex-direction: column; gap: 10px; }
+        .court { background: #2e7d32; color: white; border-radius: 10px; padding: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.15); }
+        .court-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 6px; margin-bottom: 8px; }
+        .court-title { font-size: 1rem; font-weight: bold; }
+        .section-label { font-size: 11px; font-weight: bold; opacity: 0.9; margin: 4px 0 4px 0; display: flex; justify-content: space-between; }
+        .sync-status { text-align: center; font-size: 11px; color: #27ae60; margin-bottom: 8px; }
         
-        .court-names-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 8px; }
-        .court-names-grid input { width: 100%; font-size: 14px; padding: 6px; }
+        .court-names-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin-top: 6px; }
+        .court-names-grid input { width: 100%; font-size: 13px; padding: 5px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>🏸 羽球團即時同步排點系統</h1>
-    <div class="sync-status">🟢 雲端連線成功 (任何變更將即時推送到所有手機)</div>
+    <div class="sync-status">🟢 雲端同步中</div>
+
+    <!-- 📱 頂部頁籤分頁 -->
+    <div class="tab-bar">
+        <div class="tab-btn active" id="tab-btn-courts" onclick="switchTab('courts')">🏟️ 球場狀態</div>
+        <div class="tab-btn" id="tab-btn-queue" onclick="switchTab('queue')">⏳ 中央隊列 (<span id="tab-queue-count">0</span>人)</div>
+        <div class="tab-btn" id="tab-btn-register" onclick="switchTab('register')">🙋 報到區 (<span id="tab-idle-count">0</span>人)</div>
+    </div>
     
     <!-- 管理者面板 -->
     <div id="admin-panel" class="panel hidden">
-        <h2>🛠️ 管理者後台</h2>
-        <div style="display: flex; flex-direction: column; gap: 12px;">
+        <h3 style="margin-top:0;">🛠️ 管理者後台</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
             <label><strong>1. 設定球場數量與名稱：</strong><br>
                 <select id="court-select" onchange="onCourtCountSelectChange()" style="margin-top: 5px;">
                     <option value="1">1 面場地</option>
@@ -74,39 +86,44 @@
                     <option value="10">10 面場地</option>
                 </select>
                 <div id="court-names-inputs" class="court-names-grid"></div>
-                <button onclick="saveCourtNames()" style="margin-top: 8px; background: #3498db; width: 100%;">💾 更新場地設定</button>
+                <button onclick="saveCourtNames()" style="margin-top: 6px; background: #3498db; width: 100%;">💾 更新場地設定</button>
             </label>
             <hr style="width: 100%; border: 0; border-top: 1px solid #eee;">
             <label><strong>2. 批次匯入球友名單：</strong><br>
-                <textarea id="import-names" rows="3" style="width: 100%; margin-top: 5px;" placeholder="請輸入姓名，一行一個"></textarea>
+                <textarea id="import-names" rows="2" style="width: 100%; margin-top: 5px;" placeholder="請輸入姓名，一行一個"></textarea>
                 <button onclick="importPlayers()" style="margin-top: 5px; width: 100%;">匯入名單</button>
             </label>
-            <button onclick="clearAllData()" style="background: #e74c3c; margin-top: 10px;">⚠️ 清空今日所有資料</button>
+            <button onclick="clearAllData()" style="background: #e74c3c; margin-top: 5px;">⚠️ 清空今日所有資料</button>
         </div>
     </div>
 
-    <!-- 1. 自行報到區 (尚未排隊) -->
-    <div class="panel">
-        <h2>🙋‍♂️ 自行報到區 (未排隊熱身中)</h2>
-        <div class="input-group">
-            <input type="text" id="new-player-name" placeholder="輸入暱稱報到">
-            <button onclick="selfRegister()">報到</button>
-        </div>
-        <div class="section-label" style="color:#666; margin-top:10px;">
-            <span>☕ 報到人員名單（點擊「+入隊」進入中央排隊佇列）</span>
-        </div>
-        <div id="waiting-room" class="drop-zone-waiting" onclick="handleZoneClick(event, 'waiting-room')"></div>
+    <!-- 頁籤內容 1：🏟️ 球場狀態 -->
+    <div id="tab-content-courts" class="tab-content">
+        <div class="courts-container" id="courts-grid"></div>
     </div>
 
-    <!-- 2. 中央統一佇列等候區 (已入隊) -->
-    <div class="panel">
-        <h2>⏳ 中央預約上場佇列（依休息時間自動組隊）</h2>
-        <div id="queue-container"></div>
+    <!-- 頁籤內容 2：⏳ 中央隊列等候區 -->
+    <div id="tab-content-queue" class="tab-content hidden">
+        <div class="panel">
+            <h3 style="margin-top:0;">⏳ 中央預約隊列（自動排序）</h3>
+            <div id="queue-container"></div>
+        </div>
     </div>
 
-    <!-- 3. 球場區 -->
-    <h2>🏟️ 球場即時狀態</h2>
-    <div class="courts-container" id="courts-grid"></div>
+    <!-- 頁籤內容 3：🙋 自行報到區 -->
+    <div id="tab-content-register" class="tab-content hidden">
+        <div class="panel">
+            <h3 style="margin-top:0;">🙋 自行報到區 (未排隊)</h3>
+            <div class="input-group">
+                <input type="text" id="new-player-name" placeholder="輸入暱稱報到">
+                <button onclick="selfRegister()">報到</button>
+            </div>
+            <div class="section-label" style="color:#666; margin-top:8px;">
+                <span>☕ 熱身/休息名單（點擊「+入隊」進入中央隊列）</span>
+            </div>
+            <div id="waiting-room" class="drop-zone-waiting" onclick="handleZoneClick(event, 'waiting-room')"></div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -126,6 +143,7 @@
     const db = firebase.database();
 
     let selectedPlayerId = null;
+    let currentTab = 'courts'; // 預設頁籤
     let localData = { 
         courtCount: 2, 
         courtNames: ["第 1 場", "第 2 場"],
@@ -136,6 +154,16 @@
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('role') === 'admin') {
         document.getElementById('admin-panel').classList.remove('hidden');
+    }
+
+    // 切換頁籤功能
+    function switchTab(tabName) {
+        currentTab = tabName;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+
+        document.getElementById(`tab-btn-${tabName}`).classList.add('active');
+        document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
     }
 
     // 每秒動態刷新休息時間顯示
@@ -206,7 +234,6 @@
             if (!p.restStartTime) p.restStartTime = now;
             if (p.playCount === undefined) p.playCount = 0;
 
-            // 判斷狀態：若 location 包含 court-X-play 代表在比賽中
             if (p.location && p.location.endsWith('-play')) {
                 // 比賽中
             } else if (p.status === 'queued') {
@@ -216,9 +243,13 @@
             }
         });
 
+        // 更新頁籤計數
+        document.getElementById('tab-queue-count').innerText = queuedPlayers.length;
+        document.getElementById('tab-idle-count').innerText = idlePlayers.length;
+
         // 1. 渲染報到區（未排隊）
         if (idlePlayers.length === 0) {
-            waitingZone.innerHTML = '<span style="color:#aaa; font-size:13px; padding:5px;">沒有人在熱身/休息</span>';
+            waitingZone.innerHTML = '<span style="color:#aaa; font-size:12px; padding:5px;">沒有人在休息/熱身</span>';
         } else {
             idlePlayers.forEach(p => {
                 const tag = createPlayerTag(p.id, p, 'idle');
@@ -226,7 +257,7 @@
             });
         }
 
-        // 2. 排序排隊中的球員（已打場次少 > 進入隊列時間長）
+        // 2. 排序隊列（已打場次少 > 等待時間長）
         queuedPlayers.sort((a, b) => {
             if (a.playCount !== b.playCount) return a.playCount - b.playCount;
             return a.restStartTime - b.restStartTime;
