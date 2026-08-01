@@ -351,7 +351,6 @@
             const courtName = (localData.courtNames && localData.courtNames[i-1]) ? localData.courtNames[i-1] : `第 ${i} 場`;
             const playZoneId = `court-${i}-play`;
             
-            // 計算目前場地上人數
             let countOnCourt = 0;
             Object.keys(localData.players).forEach(id => {
                 if (localData.players[id].status === 'playing' && localData.players[id].location === playZoneId) {
@@ -359,7 +358,6 @@
                 }
             });
 
-            // 判斷顏色類別與狀態文字
             let statusClass = 'status-empty';
             let statusBadgeText = '⚪ 空場';
             if (countOnCourt >= 4) {
@@ -493,14 +491,13 @@
         const p = localData.players[selectedPlayerId];
         document.getElementById('assign-player-name').innerText = p.name;
         
-        // 球場按鈕（包含動態額滿判斷與樣式改變）
+        // 球場按鈕
         const courtBtnContainer = document.getElementById('assign-court-buttons');
         courtBtnContainer.innerHTML = '';
         for (let i = 1; i <= localData.courtCount; i++) {
             const courtName = (localData.courtNames && localData.courtNames[i-1]) ? localData.courtNames[i-1] : `場${i}`;
             const playZoneId = `court-${i}-play`;
             
-            // 計算該場地人數
             let courtCount = 0;
             Object.keys(localData.players).forEach(id => {
                 if (localData.players[id].status === 'playing' && localData.players[id].location === playZoneId) {
@@ -657,17 +654,39 @@
         saveToCloud();
     }
 
+    // 🏁 本局結束 (優化無人排隊時直接清空場地)
     function finishGame(courtNumber) {
         const courtName = (localData.courtNames && localData.courtNames[courtNumber-1]) ? localData.courtNames[courtNumber-1] : `第 ${courtNumber} 場`;
         const playZoneId = `court-${courtNumber}-play`;
 
-        let targetGroupIndex = localData.queueGroups.findIndex(g => g.players && g.players.length > 0);
-
-        if (targetGroupIndex === -1) {
-            alert('⚠️ 目前預約隊列中沒有人在排隊喔！');
+        // 檢查場上是否有球友
+        let currentOnCourtPlayers = Object.keys(localData.players).filter(id => localData.players[id].location === playZoneId);
+        
+        if (currentOnCourtPlayers.length === 0) {
+            alert(`⚠️ 【${courtName}】目前沒有球員在比賽喔！`);
             return;
         }
 
+        // 尋找第一個有人的預約組別
+        let targetGroupIndex = localData.queueGroups.findIndex(g => g.players && g.players.length > 0);
+
+        // 💡 情況 A：隊列區沒有人在排隊 -> 直接清空場地回到報到區
+        if (targetGroupIndex === -1) {
+            if (confirm(`📢 目前預約隊列中沒有人在排隊。\n\n是否確認結束【${courtName}】本局比賽，讓場上球友直接下場休息？`)) {
+                const now = Date.now();
+                currentOnCourtPlayers.forEach(id => {
+                    const p = localData.players[id];
+                    p.status = 'idle';
+                    p.location = 'waiting-room';
+                    p.restStartTime = now;
+                    p.playCount = (p.playCount || 0) + 1;
+                });
+                saveToCloud();
+            }
+            return;
+        }
+
+        // 💡 情況 B：隊列區有人排隊 -> 場上人員下場，預約組別接替上場
         const targetGroup = localData.queueGroups[targetGroupIndex];
         const groupPlayers = targetGroup.players.map(id => localData.players[id]).filter(Boolean);
         const namesText = groupPlayers.map(p => p.name).join('、');
@@ -682,16 +701,16 @@
         if (confirm(confirmMsg)) {
             const now = Date.now();
 
-            Object.keys(localData.players).forEach(id => {
+            // 1. 場上球員下場
+            currentOnCourtPlayers.forEach(id => {
                 const p = localData.players[id];
-                if (p.location === playZoneId) {
-                    p.status = 'idle';
-                    p.location = 'waiting-room';
-                    p.restStartTime = now;
-                    p.playCount = (p.playCount || 0) + 1;
-                }
+                p.status = 'idle';
+                p.location = 'waiting-room';
+                p.restStartTime = now;
+                p.playCount = (p.playCount || 0) + 1;
             });
 
+            // 2. 該組球員上場
             targetGroup.players.forEach(pId => {
                 if (localData.players[pId]) {
                     localData.players[pId].status = 'playing';
@@ -699,8 +718,10 @@
                 }
             });
 
+            // 3. 移除該預約組別
             localData.queueGroups.splice(targetGroupIndex, 1);
 
+            // 確保隨時至少保留 2 個預約組別供排隊
             while (localData.queueGroups.length < 2) {
                 localData.queueGroups.push({ id: 'group_' + Date.now() + '_' + Math.random(), players: [] });
             }
