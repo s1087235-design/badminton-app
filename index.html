@@ -32,7 +32,7 @@
         .tab-btn { flex: 1; text-align: center; padding: 10px 4px; font-size: 14px; font-weight: bold; color: #475569; border-radius: 6px; cursor: pointer; background: transparent; transition: all 0.2s; }
         .tab-btn.active { background: white; color: var(--primary-color); box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
         
-        .drop-zone { min-height: 45px; padding: 6px; background: rgba(255,255,255,0.15); border: 2px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+        .drop-zone { min-height: 45px; padding: 6px; background: rgba(255,255,255,0.18); border: 2px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
         .drop-zone-queue { min-height: 45px; padding: 6px; background: #f1f5f9; border: 2px dashed #94a3b8; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
         .drop-zone-waiting { min-height: 45px; padding: 6px; background: #f8f9fa; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
 
@@ -48,9 +48,17 @@
         .play-count-badge { background: #f39c12; border-radius: 10px; padding: 1px 5px; font-size: 10px; font-weight: normal; }
         
         .courts-container { display: flex; flex-direction: column; gap: 10px; }
-        .court { background: #2e7d32; color: white; border-radius: 10px; padding: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.15); }
+        
+        /* 🎨 球場狀態動態顏色卡片 */
+        .court { color: white; border-radius: 10px; padding: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.15); transition: background-color 0.3s ease, border-color 0.3s ease; }
+        .court.status-empty { background: #64748b; } /* ⚪ 灰色：完全空場 */
+        .court.status-partial { background: #d97706; } /* 🟡 黃褐色：人數未滿 */
+        .court.status-full { background: #2e7d32; } /* 🟢 綠色：比賽中 (滿4人) */
+
         .court-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 6px; margin-bottom: 8px; }
-        .court-title { font-size: 1rem; font-weight: bold; }
+        .court-title { font-size: 1rem; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+        .court-badge { font-size: 11px; padding: 2px 6px; border-radius: 12px; background: rgba(255,255,255,0.25); font-weight: normal; }
+        
         .section-label { font-size: 11px; font-weight: bold; opacity: 0.9; margin: 4px 0 4px 0; display: flex; justify-content: space-between; }
         .sync-status { text-align: center; font-size: 11px; color: #27ae60; margin-bottom: 8px; }
         
@@ -61,6 +69,7 @@
         .assign-bar { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: #2c3e50; color: white; padding: 8px 12px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 6px; z-index: 1000; font-size: 12px; width: 90%; max-width: 450px; }
         .assign-bar-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         .btn-direct { background: #1abc9c; color: white; border: none; padding: 4px 8px; border-radius: 10px; font-size: 12px; cursor: pointer; }
+        .btn-direct.full { background: #95a5a6; opacity: 0.6; cursor: not-allowed; }
         .btn-queue-direct { background: #3498db; color: white; border: none; padding: 4px 8px; border-radius: 10px; font-size: 12px; cursor: pointer; }
 
         /* Modal 後台彈窗 */
@@ -224,7 +233,6 @@
                     { id: 'group_2', players: [] }
                 ];
             }
-            // 確保組別內 players 為陣列
             localData.queueGroups.forEach(g => { if (!g.players) g.players = []; });
 
             if (!localData.courtNames) {
@@ -281,7 +289,6 @@
         const idlePlayers = [];
         let queuedCount = 0;
 
-        // 計算隊列總人數
         localData.queueGroups.forEach(g => {
             if (g.players) queuedCount += g.players.length;
         });
@@ -336,28 +343,52 @@
             });
         });
 
-        // 3. 球場區
+        // 3. 球場區 (計算場地人數與動態切換狀態顏色)
         const grid = document.getElementById('courts-grid');
         grid.innerHTML = '';
 
         for (let i = 1; i <= localData.courtCount; i++) {
             const courtName = (localData.courtNames && localData.courtNames[i-1]) ? localData.courtNames[i-1] : `第 ${i} 場`;
+            const playZoneId = `court-${i}-play`;
+            
+            // 計算目前場地上人數
+            let countOnCourt = 0;
+            Object.keys(localData.players).forEach(id => {
+                if (localData.players[id].status === 'playing' && localData.players[id].location === playZoneId) {
+                    countOnCourt++;
+                }
+            });
+
+            // 判斷顏色類別與狀態文字
+            let statusClass = 'status-empty';
+            let statusBadgeText = '⚪ 空場';
+            if (countOnCourt >= 4) {
+                statusClass = 'status-full';
+                statusBadgeText = '🟢 比賽中';
+            } else if (countOnCourt > 0) {
+                statusClass = 'status-partial';
+                statusBadgeText = '🟡 未滿';
+            }
+
             grid.innerHTML += `
-                <div class="court">
+                <div class="court ${statusClass}" id="court-card-${i}">
                     <div class="court-header">
-                        <span class="court-title">${courtName}</span>
+                        <span class="court-title">
+                            ${courtName}
+                            <span class="court-badge">${statusBadgeText}</span>
+                        </span>
                         <button class="btn-action" onclick="finishGame(${i})">🏁 本局結束 (下一組進場)</button>
                     </div>
                     <div class="section-label">
-                        <span>🎾 目前比賽中</span>
-                        <span>(<span id="count-c${i}-play">0</span>/4人)</span>
+                        <span>🎾 目前場上球員</span>
+                        <span>(<span id="count-c${i}-play">${countOnCourt}</span>/4人)</span>
                     </div>
-                    <div class="drop-zone" id="court-${i}-play" onclick="handleZoneClick(event, 'court-${i}-play')"></div>
+                    <div class="drop-zone" id="${playZoneId}" onclick="handleZoneClick(event, '${playZoneId}')"></div>
                 </div>
             `;
         }
 
-        // 比賽中球員
+        // 比賽中球員放回對應 drop-zone
         Object.keys(localData.players).forEach(id => {
             const player = localData.players[id];
             if (player.status === 'playing' && player.location) {
@@ -406,7 +437,6 @@
         });
 
         renderAssignBar();
-        updateCounters();
     }
 
     function removePlayerFromAllQueueGroups(playerId) {
@@ -463,15 +493,31 @@
         const p = localData.players[selectedPlayerId];
         document.getElementById('assign-player-name').innerText = p.name;
         
-        // 球場按鈕
+        // 球場按鈕（包含動態額滿判斷與樣式改變）
         const courtBtnContainer = document.getElementById('assign-court-buttons');
         courtBtnContainer.innerHTML = '';
         for (let i = 1; i <= localData.courtCount; i++) {
             const courtName = (localData.courtNames && localData.courtNames[i-1]) ? localData.courtNames[i-1] : `場${i}`;
+            const playZoneId = `court-${i}-play`;
+            
+            // 計算該場地人數
+            let courtCount = 0;
+            Object.keys(localData.players).forEach(id => {
+                if (localData.players[id].status === 'playing' && localData.players[id].location === playZoneId) {
+                    courtCount++;
+                }
+            });
+
             const btn = document.createElement('button');
             btn.className = 'btn-direct';
-            btn.innerText = courtName;
-            btn.onclick = () => directAssignToCourt(selectedPlayerId, `court-${i}-play`);
+            if (courtCount >= 4) {
+                btn.classList.add('full');
+                btn.innerText = `${courtName} (滿)`;
+            } else {
+                btn.innerText = `${courtName} (${courtCount}/4)`;
+            }
+
+            btn.onclick = () => directAssignToCourt(selectedPlayerId, playZoneId);
             courtBtnContainer.appendChild(btn);
         }
 
@@ -531,11 +577,9 @@
     function joinQueue(event, playerId) {
         if (event) event.stopPropagation();
 
-        // 尋找第一個未滿 4 人的組別
         let targetGroup = localData.queueGroups.find(g => (g.players || []).length < 4);
         
         if (!targetGroup) {
-            // 如果所有組別都滿了，新建一個組別
             const newId = 'group_' + Date.now();
             targetGroup = { id: newId, players: [] };
             localData.queueGroups.push(targetGroup);
@@ -617,7 +661,6 @@
         const courtName = (localData.courtNames && localData.courtNames[courtNumber-1]) ? localData.courtNames[courtNumber-1] : `第 ${courtNumber} 場`;
         const playZoneId = `court-${courtNumber}-play`;
 
-        // 尋找第一個有人的預約組別
         let targetGroupIndex = localData.queueGroups.findIndex(g => g.players && g.players.length > 0);
 
         if (targetGroupIndex === -1) {
@@ -639,7 +682,6 @@
         if (confirm(confirmMsg)) {
             const now = Date.now();
 
-            // 1. 下場球員清算
             Object.keys(localData.players).forEach(id => {
                 const p = localData.players[id];
                 if (p.location === playZoneId) {
@@ -650,7 +692,6 @@
                 }
             });
 
-            // 2. 該組球員上場
             targetGroup.players.forEach(pId => {
                 if (localData.players[pId]) {
                     localData.players[pId].status = 'playing';
@@ -658,10 +699,8 @@
                 }
             });
 
-            // 3. 移除該預約組別
             localData.queueGroups.splice(targetGroupIndex, 1);
 
-            // 確保隨時至少保留 2 個預約組別供排隊
             while (localData.queueGroups.length < 2) {
                 localData.queueGroups.push({ id: 'group_' + Date.now() + '_' + Math.random(), players: [] });
             }
@@ -727,13 +766,6 @@
             };
             saveToCloud();
             closeAdminModal();
-        }
-    }
-
-    function updateCounters() {
-        for (let i = 1; i <= localData.courtCount; i++) {
-            const playZone = document.getElementById(`court-${i}-play`);
-            if (playZone) document.getElementById(`count-c${i}-play`).innerText = playZone.children.length;
         }
     }
 </script>
