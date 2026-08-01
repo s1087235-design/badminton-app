@@ -13,29 +13,39 @@
     <style>
         :root { --primary-color: #2c3e50; --accent-color: #1abc9c; --selected-color: #9b59b6; --bg-color: #f4f6f7; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; padding: 15px; touch-action: manipulation; }
-        h1, h2 { text-align: center; color: var(--primary-color); margin: 10px 0; }
+        h1, h2, h3 { text-align: center; color: var(--primary-color); margin: 10px 0; }
         .container { max-width: 800px; margin: 0 auto; }
         .panel { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; }
         .hidden { display: none; }
         select, input, button, textarea { padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
         select { background-color: white; width: 100%; max-width: 200px; }
         button { background: var(--primary-color); color: white; border: none; font-weight: bold; cursor: pointer; }
-        .btn-action { background: #27ae60; padding: 5px 10px; font-size: 13px; border-radius: 4px; }
+        .btn-action { background: #27ae60; padding: 6px 12px; font-size: 14px; border-radius: 6px; }
+        .btn-join { background: #e67e22; border: none; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 4px; }
+        .btn-leave { background: #7f8c8d; border: none; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 4px; }
         .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
         .input-group input { flex: 1; }
+        
         .drop-zone { min-height: 50px; padding: 8px; background: rgba(255,255,255,0.15); border: 2px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
-        #waiting-room { background: #fafafa; border: 2px dashed #ddd; min-height: 65px; }
-        .player-tag { background: var(--accent-color); color: white; padding: 7px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; user-select: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .drop-zone-waiting { min-height: 50px; padding: 8px; background: #f8f9fa; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+
+        /* 中央隊列組別樣式 */
+        .queue-group-card { background: #ffffff; border: 2px solid #3498db; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+        .queue-group-header { font-weight: bold; color: #2980b9; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .player-tag { background: var(--accent-color); color: white; padding: 6px 10px; border-radius: 20px; font-weight: bold; font-size: 13px; user-select: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-flex; align-items: center; gap: 4px; }
         .player-tag.selected { background-color: var(--selected-color); }
+        .player-tag.idle-tag { background-color: #7f8c8d; }
+        .rest-badge { background: rgba(0,0,0,0.25); border-radius: 10px; padding: 2px 6px; font-size: 11px; font-weight: normal; }
+        .play-count-badge { background: #f39c12; border-radius: 10px; padding: 2px 6px; font-size: 11px; font-weight: normal; }
+        
         .courts-container { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
         .court { background: #2e7d32; color: white; border-radius: 10px; padding: 12px; box-shadow: 0 3px 6px rgba(0,0,0,0.15); }
         .court-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 8px; margin-bottom: 10px; }
         .court-title { font-size: 1.1rem; font-weight: bold; }
         .section-label { font-size: 12px; font-weight: bold; opacity: 0.9; margin: 6px 0 4px 0; display: flex; justify-content: space-between; }
-        .drop-zone.clickable-target { border-color: var(--selected-color) !important; background: rgba(155, 89, 182, 0.2) !important; }
         .sync-status { text-align: center; font-size: 12px; color: #27ae60; margin-bottom: 10px; }
         
-        /* 自訂名稱編輯區樣式 */
         .court-names-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 8px; }
         .court-names-grid input { width: 100%; font-size: 14px; padding: 6px; }
     </style>
@@ -64,7 +74,7 @@
                     <option value="10">10 面場地</option>
                 </select>
                 <div id="court-names-inputs" class="court-names-grid"></div>
-                <button onclick="saveCourtNames()" style="margin-top: 8px; background: #3498db; width: 100%;">💾 更新場地名稱</button>
+                <button onclick="saveCourtNames()" style="margin-top: 8px; background: #3498db; width: 100%;">💾 更新場地設定</button>
             </label>
             <hr style="width: 100%; border: 0; border-top: 1px solid #eee;">
             <label><strong>2. 批次匯入球友名單：</strong><br>
@@ -75,17 +85,26 @@
         </div>
     </div>
 
-    <!-- 休息區 -->
+    <!-- 1. 自行報到區 (尚未排隊) -->
     <div class="panel">
-        <h2>🙋‍♂️ 自行報到 / 大會休息區</h2>
+        <h2>🙋‍♂️ 自行報到區 (未排隊熱身中)</h2>
         <div class="input-group">
-            <input type="text" id="new-player-name" placeholder="輸入您的暱稱">
+            <input type="text" id="new-player-name" placeholder="輸入暱稱報到">
             <button onclick="selfRegister()">報到</button>
         </div>
-        <div id="waiting-room" class="drop-zone" onclick="handleZoneClick(event, 'waiting-room')"></div>
+        <div class="section-label" style="color:#666; margin-top:10px;">
+            <span>☕ 報到人員名單（點擊「+入隊」進入中央排隊佇列）</span>
+        </div>
+        <div id="waiting-room" class="drop-zone-waiting" onclick="handleZoneClick(event, 'waiting-room')"></div>
     </div>
 
-    <!-- 球場區 -->
+    <!-- 2. 中央統一佇列等候區 (已入隊) -->
+    <div class="panel">
+        <h2>⏳ 中央預約上場佇列（依休息時間自動組隊）</h2>
+        <div id="queue-container"></div>
+    </div>
+
+    <!-- 3. 球場區 -->
     <h2>🏟️ 球場即時狀態</h2>
     <div class="courts-container" id="courts-grid"></div>
 </div>
@@ -119,7 +138,12 @@
         document.getElementById('admin-panel').classList.remove('hidden');
     }
 
-    // 監聽 Firebase 雲端資料庫（即時推送）
+    // 每秒動態刷新休息時間顯示
+    setInterval(() => {
+        updateRestTimeBadges();
+    }, 1000);
+
+    // 監聽 Firebase 雲端資料庫
     db.ref('badminton_session').on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -136,32 +160,25 @@
         }
     });
 
-    // 儲存更新至雲端
     function saveToCloud() {
         db.ref('badminton_session').set(localData);
     }
 
-    // 渲染管理者設定球場名稱的輸入框
     function renderAdminCourtInputs() {
         const container = document.getElementById('court-names-inputs');
         if (!container) return;
         container.innerHTML = '';
-        
         const count = parseInt(document.getElementById('court-select').value);
         for (let i = 0; i < count; i++) {
             const currentName = (localData.courtNames && localData.courtNames[i]) ? localData.courtNames[i] : `第 ${i+1} 場`;
-            container.innerHTML += `
-                <input type="text" id="court-name-input-${i}" value="${currentName}" placeholder="場地 ${i+1} 名稱">
-            `;
+            container.innerHTML += `<input type="text" id="court-name-input-${i}" value="${currentName}" placeholder="場地 ${i+1} 名稱">`;
         }
     }
 
-    // 當選單數量改變時更新輸入框
     function onCourtCountSelectChange() {
         renderAdminCourtInputs();
     }
 
-    // 儲存自訂場地名稱與數量
     function saveCourtNames() {
         const count = parseInt(document.getElementById('court-select').value);
         const newNames = [];
@@ -169,15 +186,83 @@
             const inputVal = document.getElementById(`court-name-input-${i}`).value.trim();
             newNames.push(inputVal || `第 ${i+1} 場`);
         }
-        
         localData.courtCount = count;
         localData.courtNames = newNames;
         saveToCloud();
-        alert('✅ 場地設定已成功更新並同步！');
+        alert('✅ 場地設定已更新！');
     }
 
-    // 畫面渲染邏輯
+    // 計算並渲染 UI
     function renderUI() {
+        const now = Date.now();
+        const waitingZone = document.getElementById('waiting-room');
+        waitingZone.innerHTML = '';
+        
+        const idlePlayers = [];
+        const queuedPlayers = [];
+
+        Object.keys(localData.players).forEach(id => {
+            const p = localData.players[id];
+            if (!p.restStartTime) p.restStartTime = now;
+            if (p.playCount === undefined) p.playCount = 0;
+
+            // 判斷狀態：若 location 包含 court-X-play 代表在比賽中
+            if (p.location && p.location.endsWith('-play')) {
+                // 比賽中
+            } else if (p.status === 'queued') {
+                queuedPlayers.push({ id, ...p });
+            } else {
+                idlePlayers.push({ id, ...p });
+            }
+        });
+
+        // 1. 渲染報到區（未排隊）
+        if (idlePlayers.length === 0) {
+            waitingZone.innerHTML = '<span style="color:#aaa; font-size:13px; padding:5px;">沒有人在熱身/休息</span>';
+        } else {
+            idlePlayers.forEach(p => {
+                const tag = createPlayerTag(p.id, p, 'idle');
+                waitingZone.appendChild(tag);
+            });
+        }
+
+        // 2. 排序排隊中的球員（已打場次少 > 進入隊列時間長）
+        queuedPlayers.sort((a, b) => {
+            if (a.playCount !== b.playCount) return a.playCount - b.playCount;
+            return a.restStartTime - b.restStartTime;
+        });
+
+        // 按 4 人一組編入中央佇列
+        const queueContainer = document.getElementById('queue-container');
+        queueContainer.innerHTML = '';
+
+        if (queuedPlayers.length === 0) {
+            queueContainer.innerHTML = '<div style="text-align:center; color:#888; padding:15px;">目前佇列中沒有人在排隊</div>';
+        } else {
+            const totalGroups = Math.ceil(queuedPlayers.length / 4);
+            for (let g = 0; g < totalGroups; g++) {
+                const groupPlayers = queuedPlayers.slice(g * 4, (g + 1) * 4);
+                
+                const groupCard = document.createElement('div');
+                groupCard.className = 'queue-group-card';
+                groupCard.innerHTML = `
+                    <div class="queue-group-header">
+                        <span>👥 第 ${g + 1} 組 (${groupPlayers.length}/4人)</span>
+                    </div>
+                    <div class="drop-zone" id="queue-group-${g}" onclick="handleZoneClick(event, 'queue-group-${g}')"></div>
+                `;
+                
+                queueContainer.appendChild(groupCard);
+
+                const groupZone = groupCard.querySelector('.drop-zone');
+                groupPlayers.forEach(p => {
+                    const tag = createPlayerTag(p.id, p, 'queued');
+                    groupZone.appendChild(tag);
+                });
+            }
+        }
+
+        // 3. 渲染球場區域
         const grid = document.getElementById('courts-grid');
         grid.innerHTML = '';
 
@@ -188,38 +273,31 @@
                 <div class="court">
                     <div class="court-header">
                         <span class="court-title">${courtName}</span>
-                        <button class="btn-action" onclick="rotateQueue(${i})">▶️ 預約組上場</button>
+                        <button class="btn-action" onclick="finishGame(${i})">🏁 本局結束 (第1組進場)</button>
                     </div>
                     <div class="section-label">
-                        <span>🎾 目前上場中</span>
+                        <span>🎾 目前比賽中</span>
                         <span>(<span id="count-c${i}-play">0</span>/4人)</span>
                     </div>
                     <div class="drop-zone" id="court-${i}-play" onclick="handleZoneClick(event, 'court-${i}-play')"></div>
-                    <div class="section-label" style="margin-top: 10px; color: #f39c12;">
-                        <span>⏳ 下組預約等待區</span>
-                        <span>(<span id="count-c${i}-queue">0</span>/4人)</span>
-                    </div>
-                    <div class="drop-zone" id="court-${i}-queue" onclick="handleZoneClick(event, 'court-${i}-queue')"></div>
                 </div>
             `;
         }
 
-        document.getElementById('waiting-room').innerHTML = '';
-
+        // 放置球場上比賽中的球員
         Object.keys(localData.players).forEach(id => {
             const player = localData.players[id];
-            const tag = createPlayerTag(id, player.name);
-            const targetZone = document.getElementById(player.location);
-            if (targetZone) {
-                targetZone.appendChild(tag);
-            } else {
-                document.getElementById('waiting-room').appendChild(tag);
-                player.location = 'waiting-room';
+            if (player.location && player.location.endsWith('-play')) {
+                const targetZone = document.getElementById(player.location);
+                if (targetZone) {
+                    const tag = createPlayerTag(id, player, 'playing');
+                    targetZone.appendChild(tag);
+                }
             }
         });
 
-        // 綁定拖曳功能
-        document.querySelectorAll('.drop-zone').forEach(zone => {
+        // 4. 綁定 SortableJS 拖曳功能
+        document.querySelectorAll('.drop-zone, .drop-zone-waiting').forEach(zone => {
             new Sortable(zone, {
                 group: 'badminton',
                 animation: 150,
@@ -227,14 +305,23 @@
                     const playerId = evt.item.dataset.id;
                     const targetZoneId = evt.to.id;
 
-                    if ((targetZoneId.includes('-play') || targetZoneId.includes('-queue')) && evt.to.children.length > 4) {
-                        alert('⚠️ 該區域上限為 4 人！');
+                    if (targetZoneId.includes('-play') && evt.to.children.length > 4) {
+                        alert('⚠️ 球場上限為 4 人！');
                         renderUI();
                         return;
                     }
 
                     if (localData.players[playerId]) {
-                        localData.players[playerId].location = targetZoneId;
+                        if (targetZoneId === 'waiting-room') {
+                            localData.players[playerId].status = 'idle';
+                            localData.players[playerId].location = 'waiting-room';
+                        } else if (targetZoneId.includes('-play')) {
+                            localData.players[playerId].status = 'playing';
+                            localData.players[playerId].location = targetZoneId;
+                        } else {
+                            localData.players[playerId].status = 'queued';
+                            localData.players[playerId].location = 'queued';
+                        }
                         saveToCloud();
                     }
                 }
@@ -245,41 +332,163 @@
     }
 
     // 建立球員標籤
-    function createPlayerTag(id, name) {
+    function createPlayerTag(id, player, state) {
         const tag = document.createElement('div');
         tag.className = 'player-tag';
-        tag.innerText = name;
+        if (state === 'idle') tag.classList.add('idle-tag');
         tag.dataset.id = id;
+        tag.dataset.restStart = player.restStartTime || Date.now();
+        tag.dataset.isPlaying = state === 'playing' ? 'true' : 'false';
+        
         if (selectedPlayerId === id) tag.classList.add('selected');
+        
+        const restText = getRestTimeString(player.restStartTime, state === 'playing');
+        const playCount = player.playCount || 0;
+
+        let actionBtnHtml = '';
+        if (state === 'idle') {
+            actionBtnHtml = `<button class="btn-join" onclick="joinQueue(event, '${id}')">+入隊</button>`;
+        } else if (state === 'queued') {
+            actionBtnHtml = `<button class="btn-leave" onclick="leaveQueue(event, '${id}')">退隊</button>`;
+        }
+
+        tag.innerHTML = `
+            <span>${player.name}</span>
+            <span class="play-count-badge">${playCount}場</span>
+            <span class="rest-badge">${restText}</span>
+            ${actionBtnHtml}
+        `;
         
         tag.onclick = function(e) {
             e.stopPropagation();
-            if (selectedPlayerId === id) {
-                selectedPlayerId = null;
-            } else {
-                selectedPlayerId = id;
-            }
+            selectedPlayerId = (selectedPlayerId === id) ? null : id;
             renderUI();
         };
         return tag;
     }
 
-    // 點選移位操作
+    // 球友點擊「+入隊」進入中央佇列
+    function joinQueue(event, playerId) {
+        event.stopPropagation();
+        if (localData.players[playerId]) {
+            localData.players[playerId].status = 'queued';
+            localData.players[playerId].location = 'queued';
+            localData.players[playerId].restStartTime = Date.now();
+            saveToCloud();
+        }
+    }
+
+    // 球友點擊「退隊」回到報到區
+    function leaveQueue(event, playerId) {
+        event.stopPropagation();
+        if (localData.players[playerId]) {
+            localData.players[playerId].status = 'idle';
+            localData.players[playerId].location = 'waiting-room';
+            saveToCloud();
+        }
+    }
+
+    // 即時計算休息時間字串
+    function getRestTimeString(startTime, isPlaying) {
+        if (isPlaying) return '比賽中';
+        if (!startTime) return '0分';
+        const diffMin = Math.floor((Date.now() - startTime) / 60000);
+        return diffMin < 1 ? '剛下場' : `等 ${diffMin}分`;
+    }
+
+    // 動態更新休息時間 Badge
+    function updateRestTimeBadges() {
+        document.querySelectorAll('.player-tag').forEach(tag => {
+            if (tag.dataset.isPlaying === 'false') {
+                const startTime = parseInt(tag.dataset.restStart);
+                const badge = tag.querySelector('.rest-badge');
+                if (badge) badge.innerText = getRestTimeString(startTime, false);
+            }
+        });
+    }
+
+    // 點選移動操作
     function handleZoneClick(event, targetZoneId) {
         if (!selectedPlayerId) return;
 
         const targetZone = document.getElementById(targetZoneId);
-        if ((targetZoneId.includes('-play') || targetZoneId.includes('-queue')) && targetZone.children.length >= 4) {
-            alert('⚠️ 該區域上限為 4 人！');
+        if (targetZoneId.includes('-play') && targetZone.children.length >= 4) {
+            alert('⚠️ 球場上限為 4 人！');
             return;
         }
 
-        localData.players[selectedPlayerId].location = targetZoneId;
+        if (targetZoneId === 'waiting-room') {
+            localData.players[selectedPlayerId].status = 'idle';
+            localData.players[selectedPlayerId].location = 'waiting-room';
+        } else if (targetZoneId.includes('-play')) {
+            localData.players[selectedPlayerId].status = 'playing';
+            localData.players[selectedPlayerId].location = targetZoneId;
+        } else {
+            localData.players[selectedPlayerId].status = 'queued';
+            localData.players[selectedPlayerId].location = 'queued';
+            localData.players[selectedPlayerId].restStartTime = Date.now();
+        }
+
         selectedPlayerId = null;
         saveToCloud();
     }
 
-    // 自行報到
+    // 🏁 結束本局：自動叫排隊佇列中的前 4 人進場
+    function finishGame(courtNumber) {
+        const courtName = (localData.courtNames && localData.courtNames[courtNumber-1]) ? localData.courtNames[courtNumber-1] : `第 ${courtNumber} 場`;
+        const playZoneId = `court-${courtNumber}-play`;
+
+        // 1. 抓出所有在排隊中 (status === 'queued') 的球員
+        const queuedPlayers = [];
+        Object.keys(localData.players).forEach(id => {
+            const p = localData.players[id];
+            if (p.status === 'queued') {
+                queuedPlayers.push({ id, ...p });
+            }
+        });
+
+        // 排序：已打場次少優先 > 等待時間長優先
+        queuedPlayers.sort((a, b) => {
+            if (a.playCount !== b.playCount) return (a.playCount || 0) - (b.playCount || 0);
+            return (a.restStartTime || 0) - (b.restStartTime || 0);
+        });
+
+        // 2. 取出前 4 位球員（即第 1 組）
+        const group1Players = queuedPlayers.slice(0, 4);
+
+        if (group1Players.length === 0) {
+            alert('⚠️ 目前預約佇列中沒有人在排隊喔！請球友點擊「+入隊」');
+            return;
+        }
+
+        const namesText = group1Players.map(p => p.name).join('、');
+        const confirmMsg = `📢 請【第 1 組 (${namesText})】\n👉 至【${courtName}】上場準備開打！\n\n是否確認切換？`;
+        
+        if (confirm(confirmMsg)) {
+            const now = Date.now();
+
+            // 1. 原球場上的球員下場，回到報到區（未排隊狀態），上場次數 +1
+            Object.keys(localData.players).forEach(id => {
+                const p = localData.players[id];
+                if (p.location === playZoneId) {
+                    p.status = 'idle';
+                    p.location = 'waiting-room';
+                    p.restStartTime = now;
+                    p.playCount = (p.playCount || 0) + 1;
+                }
+            });
+
+            // 2. 第 1 組的球員狀態變更為比賽中
+            group1Players.forEach(p => {
+                localData.players[p.id].status = 'playing';
+                localData.players[p.id].location = playZoneId;
+            });
+
+            saveToCloud();
+        }
+    }
+
+    // 球友自行報到
     function selfRegister() {
         const input = document.getElementById('new-player-name');
         const name = input.value.trim();
@@ -287,52 +496,38 @@
         
         const id = 'p_' + Date.now() + '_' + Math.floor(Math.random()*1000);
         if (!localData.players) localData.players = {};
-        localData.players[id] = { name: name, location: 'waiting-room' };
+        localData.players[id] = { 
+            name: name, 
+            status: 'idle',
+            location: 'waiting-room',
+            restStartTime: Date.now(),
+            playCount: 0 
+        };
         
         input.value = '';
         saveToCloud();
     }
 
-    // 管理者匯入名單
+    // 團主匯入名單
     function importPlayers() {
         const textarea = document.getElementById('import-names');
         const names = textarea.value.split('\n');
         if (!localData.players) localData.players = {};
         
+        const now = Date.now();
         names.forEach(name => {
             if (name.trim()) {
                 const id = 'p_' + Date.now() + '_' + Math.floor(Math.random()*1000);
-                localData.players[id] = { name: name.trim(), location: 'waiting-room' };
+                localData.players[id] = { 
+                    name: name.trim(), 
+                    status: 'idle',
+                    location: 'waiting-room',
+                    restStartTime: now,
+                    playCount: 0 
+                };
             }
         });
         textarea.value = '';
-        saveToCloud();
-    }
-
-    // 輪替上場
-    function rotateQueue(courtNumber) {
-        const playZoneId = `court-${courtNumber}-play`;
-        const queueZoneId = `court-${courtNumber}-queue`;
-
-        let hasQueue = false;
-        Object.keys(localData.players).forEach(id => {
-            if (localData.players[id].location === queueZoneId) hasQueue = true;
-        });
-
-        if (!hasQueue) {
-            alert(`該場地的「預約等待區」目前沒有人喔！`);
-            return;
-        }
-
-        Object.keys(localData.players).forEach(id => {
-            const p = localData.players[id];
-            if (p.location === playZoneId) {
-                p.location = 'waiting-room';
-            } else if (p.location === queueZoneId) {
-                p.location = playZoneId;
-            }
-        });
-
         saveToCloud();
     }
 
@@ -350,9 +545,7 @@
     function updateCounters() {
         for (let i = 1; i <= localData.courtCount; i++) {
             const playZone = document.getElementById(`court-${i}-play`);
-            const queueZone = document.getElementById(`court-${i}-queue`);
             if (playZone) document.getElementById(`count-c${i}-play`).innerText = playZone.children.length;
-            if (queueZone) document.getElementById(`count-c${i}-queue`).innerText = queueZone.children.length;
         }
     }
 </script>
