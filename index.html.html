@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>羽球團即時同步排點系統</title>
+    <!-- 引入 SortableJS 手機拖曳套件 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <!-- 引入 Firebase SDK (Compat 版) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <style>
+        :root { --primary-color: #2c3e50; --accent-color: #1abc9c; --selected-color: #9b59b6; --bg-color: #f4f6f7; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); margin: 0; padding: 15px; touch-action: manipulation; }
+        h1, h2 { text-align: center; color: var(--primary-color); margin: 10px 0; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .panel { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; }
+        .hidden { display: none; }
+        select, input, button, textarea { padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
+        select { background-color: white; width: 100%; max-width: 200px; }
+        button { background: var(--primary-color); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .btn-action { background: #27ae60; padding: 5px 10px; font-size: 13px; border-radius: 4px; }
+        .input-group { display: flex; gap: 8px; margin-bottom: 10px; }
+        .input-group input { flex: 1; }
+        .drop-zone { min-height: 50px; padding: 8px; background: rgba(255,255,255,0.15); border: 2px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+        #waiting-room { background: #fafafa; border: 2px dashed #ddd; min-height: 65px; }
+        .player-tag { background: var(--accent-color); color: white; padding: 7px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; user-select: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .player-tag.selected { background-color: var(--selected-color); }
+        .courts-container { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
+        .court { background: #2e7d32; color: white; border-radius: 10px; padding: 12px; box-shadow: 0 3px 6px rgba(0,0,0,0.15); }
+        .court-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 8px; margin-bottom: 10px; }
+        .court-title { font-size: 1.1rem; font-weight: bold; }
+        .section-label { font-size: 12px; font-weight: bold; opacity: 0.9; margin: 6px 0 4px 0; display: flex; justify-content: space-between; }
+        .drop-zone.clickable-target { border-color: var(--selected-color) !important; background: rgba(155, 89, 182, 0.2) !important; }
+        .sync-status { text-align: center; font-size: 12px; color: #27ae60; margin-bottom: 10px; }
+        
+        /* 自訂名稱編輯區樣式 */
+        .court-names-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 8px; }
+        .court-names-grid input { width: 100%; font-size: 14px; padding: 6px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🏸 羽球團即時同步排點系統</h1>
+    <div class="sync-status">🟢 雲端連線成功 (任何變更將即時推送到所有手機)</div>
+    
+    <!-- 管理者面板 -->
+    <div id="admin-panel" class="panel hidden">
+        <h2>🛠️ 管理者後台</h2>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <label><strong>1. 設定球場數量與名稱：</strong><br>
+                <select id="court-select" onchange="onCourtCountSelectChange()" style="margin-top: 5px;">
+                    <option value="1">1 面場地</option>
+                    <option value="2" selected>2 面場地</option>
+                    <option value="3">3 面場地</option>
+                    <option value="4">4 面場地</option>
+                    <option value="5">5 面場地</option>
+                    <option value="6">6 面場地</option>
+                    <option value="7">7 面場地</option>
+                    <option value="8">8 面場地</option>
+                    <option value="9">9 面場地</option>
+                    <option value="10">10 面場地</option>
+                </select>
+                <div id="court-names-inputs" class="court-names-grid"></div>
+                <button onclick="saveCourtNames()" style="margin-top: 8px; background: #3498db; width: 100%;">💾 更新場地名稱</button>
+            </label>
+            <hr style="width: 100%; border: 0; border-top: 1px solid #eee;">
+            <label><strong>2. 批次匯入球友名單：</strong><br>
+                <textarea id="import-names" rows="3" style="width: 100%; margin-top: 5px;" placeholder="請輸入姓名，一行一個"></textarea>
+                <button onclick="importPlayers()" style="margin-top: 5px; width: 100%;">匯入名單</button>
+            </label>
+            <button onclick="clearAllData()" style="background: #e74c3c; margin-top: 10px;">⚠️ 清空今日所有資料</button>
+        </div>
+    </div>
+
+    <!-- 休息區 -->
+    <div class="panel">
+        <h2>🙋‍♂️ 自行報到 / 大會休息區</h2>
+        <div class="input-group">
+            <input type="text" id="new-player-name" placeholder="輸入您的暱稱">
+            <button onclick="selfRegister()">報到</button>
+        </div>
+        <div id="waiting-room" class="drop-zone" onclick="handleZoneClick(event, 'waiting-room')"></div>
+    </div>
+
+    <!-- 球場區 -->
+    <h2>🏟️ 球場即時狀態</h2>
+    <div class="courts-container" id="courts-grid"></div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyASH_97p9_QYKjT2sW_feAjYNM3fVWUn3w",
+        authDomain: "badmition-3e59e.firebaseapp.com",
+        databaseURL: "https://badmition-3e59e-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "badmition-3e59e",
+        storageBucket: "badmition-3e59e.firebasestorage.app",
+        messagingSenderId: "635218864255",
+        appId: "1:635218864255:web:3d7f0b29e4583b668df74a",
+        measurementId: "G-5SW4CXECXP"
+    };
+    
+    // 初始化 Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let selectedPlayerId = null;
+    let localData = { 
+        courtCount: 2, 
+        courtNames: ["第 1 場", "第 2 場"],
+        players: {} 
+    };
+
+    // 檢查網址是否帶有 ?role=admin
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('role') === 'admin') {
+        document.getElementById('admin-panel').classList.remove('hidden');
+    }
+
+    // 監聽 Firebase 雲端資料庫（即時推送）
+    db.ref('badminton_session').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            localData = data;
+            if (!localData.players) localData.players = {};
+            if (!localData.courtNames) {
+                localData.courtNames = Array.from({length: localData.courtCount || 2}, (_, i) => `第 ${i+1} 場`);
+            }
+            document.getElementById('court-select').value = localData.courtCount || 2;
+            renderAdminCourtInputs();
+            renderUI();
+        } else {
+            saveToCloud();
+        }
+    });
+
+    // 儲存更新至雲端
+    function saveToCloud() {
+        db.ref('badminton_session').set(localData);
+    }
+
+    // 渲染管理者設定球場名稱的輸入框
+    function renderAdminCourtInputs() {
+        const container = document.getElementById('court-names-inputs');
+        if (!container) return;
+        container.innerHTML = '';
+        
+        const count = parseInt(document.getElementById('court-select').value);
+        for (let i = 0; i < count; i++) {
+            const currentName = (localData.courtNames && localData.courtNames[i]) ? localData.courtNames[i] : `第 ${i+1} 場`;
+            container.innerHTML += `
+                <input type="text" id="court-name-input-${i}" value="${currentName}" placeholder="場地 ${i+1} 名稱">
+            `;
+        }
+    }
+
+    // 當選單數量改變時更新輸入框
+    function onCourtCountSelectChange() {
+        renderAdminCourtInputs();
+    }
+
+    // 儲存自訂場地名稱與數量
+    function saveCourtNames() {
+        const count = parseInt(document.getElementById('court-select').value);
+        const newNames = [];
+        for (let i = 0; i < count; i++) {
+            const inputVal = document.getElementById(`court-name-input-${i}`).value.trim();
+            newNames.push(inputVal || `第 ${i+1} 場`);
+        }
+        
+        localData.courtCount = count;
+        localData.courtNames = newNames;
+        saveToCloud();
+        alert('✅ 場地設定已成功更新並同步！');
+    }
+
+    // 畫面渲染邏輯
+    function renderUI() {
+        const grid = document.getElementById('courts-grid');
+        grid.innerHTML = '';
+
+        for (let i = 1; i <= localData.courtCount; i++) {
+            const courtName = (localData.courtNames && localData.courtNames[i-1]) ? localData.courtNames[i-1] : `第 ${i} 場`;
+            
+            grid.innerHTML += `
+                <div class="court">
+                    <div class="court-header">
+                        <span class="court-title">${courtName}</span>
+                        <button class="btn-action" onclick="rotateQueue(${i})">▶️ 預約組上場</button>
+                    </div>
+                    <div class="section-label">
+                        <span>🎾 目前上場中</span>
+                        <span>(<span id="count-c${i}-play">0</span>/4人)</span>
+                    </div>
+                    <div class="drop-zone" id="court-${i}-play" onclick="handleZoneClick(event, 'court-${i}-play')"></div>
+                    <div class="section-label" style="margin-top: 10px; color: #f39c12;">
+                        <span>⏳ 下組預約等待區</span>
+                        <span>(<span id="count-c${i}-queue">0</span>/4人)</span>
+                    </div>
+                    <div class="drop-zone" id="court-${i}-queue" onclick="handleZoneClick(event, 'court-${i}-queue')"></div>
+                </div>
+            `;
+        }
+
+        document.getElementById('waiting-room').innerHTML = '';
+
+        Object.keys(localData.players).forEach(id => {
+            const player = localData.players[id];
+            const tag = createPlayerTag(id, player.name);
+            const targetZone = document.getElementById(player.location);
+            if (targetZone) {
+                targetZone.appendChild(tag);
+            } else {
+                document.getElementById('waiting-room').appendChild(tag);
+                player.location = 'waiting-room';
+            }
+        });
+
+        // 綁定拖曳功能
+        document.querySelectorAll('.drop-zone').forEach(zone => {
+            new Sortable(zone, {
+                group: 'badminton',
+                animation: 150,
+                onEnd: function (evt) {
+                    const playerId = evt.item.dataset.id;
+                    const targetZoneId = evt.to.id;
+
+                    if ((targetZoneId.includes('-play') || targetZoneId.includes('-queue')) && evt.to.children.length > 4) {
+                        alert('⚠️ 該區域上限為 4 人！');
+                        renderUI();
+                        return;
+                    }
+
+                    if (localData.players[playerId]) {
+                        localData.players[playerId].location = targetZoneId;
+                        saveToCloud();
+                    }
+                }
+            });
+        });
+
+        updateCounters();
+    }
+
+    // 建立球員標籤
+    function createPlayerTag(id, name) {
+        const tag = document.createElement('div');
+        tag.className = 'player-tag';
+        tag.innerText = name;
+        tag.dataset.id = id;
+        if (selectedPlayerId === id) tag.classList.add('selected');
+        
+        tag.onclick = function(e) {
+            e.stopPropagation();
+            if (selectedPlayerId === id) {
+                selectedPlayerId = null;
+            } else {
+                selectedPlayerId = id;
+            }
+            renderUI();
+        };
+        return tag;
+    }
+
+    // 點選移位操作
+    function handleZoneClick(event, targetZoneId) {
+        if (!selectedPlayerId) return;
+
+        const targetZone = document.getElementById(targetZoneId);
+        if ((targetZoneId.includes('-play') || targetZoneId.includes('-queue')) && targetZone.children.length >= 4) {
+            alert('⚠️ 該區域上限為 4 人！');
+            return;
+        }
+
+        localData.players[selectedPlayerId].location = targetZoneId;
+        selectedPlayerId = null;
+        saveToCloud();
+    }
+
+    // 自行報到
+    function selfRegister() {
+        const input = document.getElementById('new-player-name');
+        const name = input.value.trim();
+        if (!name) return alert('請輸入暱稱！');
+        
+        const id = 'p_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+        if (!localData.players) localData.players = {};
+        localData.players[id] = { name: name, location: 'waiting-room' };
+        
+        input.value = '';
+        saveToCloud();
+    }
+
+    // 管理者匯入名單
+    function importPlayers() {
+        const textarea = document.getElementById('import-names');
+        const names = textarea.value.split('\n');
+        if (!localData.players) localData.players = {};
+        
+        names.forEach(name => {
+            if (name.trim()) {
+                const id = 'p_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+                localData.players[id] = { name: name.trim(), location: 'waiting-room' };
+            }
+        });
+        textarea.value = '';
+        saveToCloud();
+    }
+
+    // 輪替上場
+    function rotateQueue(courtNumber) {
+        const playZoneId = `court-${courtNumber}-play`;
+        const queueZoneId = `court-${courtNumber}-queue`;
+
+        let hasQueue = false;
+        Object.keys(localData.players).forEach(id => {
+            if (localData.players[id].location === queueZoneId) hasQueue = true;
+        });
+
+        if (!hasQueue) {
+            alert(`該場地的「預約等待區」目前沒有人喔！`);
+            return;
+        }
+
+        Object.keys(localData.players).forEach(id => {
+            const p = localData.players[id];
+            if (p.location === playZoneId) {
+                p.location = 'waiting-room';
+            } else if (p.location === queueZoneId) {
+                p.location = playZoneId;
+            }
+        });
+
+        saveToCloud();
+    }
+
+    // 清空資料
+    function clearAllData() {
+        if (confirm('確定要清空今天所有的球員與場地資料嗎？')) {
+            const count = parseInt(document.getElementById('court-select').value);
+            const defaultNames = Array.from({length: count}, (_, i) => `第 ${i+1} 場`);
+            localData = { courtCount: count, courtNames: defaultNames, players: {} };
+            saveToCloud();
+        }
+    }
+
+    // 計數更新
+    function updateCounters() {
+        for (let i = 1; i <= localData.courtCount; i++) {
+            const playZone = document.getElementById(`court-${i}-play`);
+            const queueZone = document.getElementById(`court-${i}-queue`);
+            if (playZone) document.getElementById(`count-c${i}-play`).innerText = playZone.children.length;
+            if (queueZone) document.getElementById(`count-c${i}-queue`).innerText = queueZone.children.length;
+        }
+    }
+</script>
+</body>
+</html>
